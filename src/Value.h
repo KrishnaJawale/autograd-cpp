@@ -10,9 +10,42 @@ class Value {
         std::vector<std::shared_ptr<Value>> prev;
         std::string op;
         std::string label;
-        std::function<void()> backward = [](){};
+        std::function<void()> backward_step = [](){};
 
         Value(float data, std::string label = "") : data(data), label(label) {}
+
+        void backward(const std::shared_ptr<Value>& root) {
+            // set grad of root node to 1 (dL/dL = 1)
+            this->grad = 1.0f;
+
+            // topological sort
+            std::vector<std::shared_ptr<Value>> topo;
+            std::unordered_set<const void*> visited;
+
+            std::function<void(const std::shared_ptr<Value>&)> buildTopo = [&](const std::shared_ptr<Value>& node) {
+                if (!node || visited.count(node.get())) {
+                    return;
+                }
+                
+                // mark node as visited
+                visited.insert(node.get());
+
+                // visit children (prev nodes)
+                for (const auto& child : node->prev) {
+                    buildTopo(child);
+                }
+
+                // add node to end of topo list
+                topo.push_back(node);
+            };
+
+            buildTopo(root);
+
+            // backward pass (on reverse topo order)
+            for (auto it = topo.rbegin(); it != topo.rend(); it++) {
+                (*it)->backward_step();
+            }
+        }
 };
 
 // GLOBAL OPERATOR OVERLOADS
@@ -21,7 +54,7 @@ std::shared_ptr<Value> operator+(const std::shared_ptr<Value>& a, const std::sha
     res->prev = {a, b};
     res->op = "+";
 
-    res->backward = [res, a, b]() {
+    res->backward_step = [res, a, b]() {
         a->grad += res->grad; // dL/da = dL/dres * dres/da = res->grad * 1
         b->grad += res->grad; // dL/db = dL/dres * dres/db = res->grad * 1
     };
@@ -34,7 +67,7 @@ std::shared_ptr<Value> operator*(const std::shared_ptr<Value>& a, const std::sha
     res->prev = {a, b};
     res->op = "*";
 
-    res->backward = [res, a, b]() {
+    res->backward_step = [res, a, b]() {
         a->grad += res->grad * b->data; // dL/da = dL/dres * dres/da = res->grad * b->data
         b->grad += res->grad * a->data; // dL/db = dL/dres * dres/db = res->grad * a->data
     };
@@ -49,7 +82,7 @@ std::shared_ptr<Value> tanh(const std::shared_ptr<Value>& a) {
     res->prev = {a};
     res->op = "tanh";
 
-    res->backward = [res, a, t]() {
+    res->backward_step = [res, a, t]() {
         // float t = std::tanh(a->data);
         a->grad += res->grad * (1 - t * t); // dL/da = dL/dres * dres/da = res->grad * (1 - tanh^2(a->data))
     };

@@ -35,18 +35,7 @@ int main () {
 
     std::cout << "o: " << o->data << std::endl;
 
-    o->grad = 1.0f; // dO/dO = 1
-    
-    o->backward();
-    d->backward();
-    x1w1x2w2->backward();
-    x1w1->backward();
-    x2w2->backward();
-    w1->backward();
-    w2->backward();
-    x1->backward();
-    x2->backward();
-    b->backward();
+    o->backward(o);
 
     exportGraph(o, "graph.dot");
 
