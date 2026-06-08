@@ -1,3 +1,6 @@
+#ifndef VALUE_H
+#define VALUE_H
+
 #include <cmath>
 #include <vector>
 #include <unordered_set>
@@ -15,9 +18,6 @@ class Value {
         Value(float data, std::string label = "") : data(data), label(label) {}
 
         void backward(const std::shared_ptr<Value>& root) {
-            // set grad of root node to 1 (dL/dL = 1)
-            root->grad = 1.0f;
-
             // topological sort
             std::vector<std::shared_ptr<Value>> topo;
             std::unordered_set<const void*> visited;
@@ -35,11 +35,15 @@ class Value {
                     buildTopo(child);
                 }
 
-                // add node to end of topo list
+                // reset node grad and add to end of topo list
+                node->grad = 0.0f;
                 topo.push_back(node);
             };
 
             buildTopo(root);
+
+            // set grad of root node to 1 (dL/dL = 1)
+            root->grad = 1.0f;
 
             // backward pass (on reverse topo order)
             for (auto it = topo.rbegin(); it != topo.rend(); it++) {
@@ -206,3 +210,5 @@ void exportGraph(const std::shared_ptr<Value>& root, const std::string& filename
 
     out << "}\n";
 }
+
+#endif // VALUE_H

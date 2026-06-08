@@ -1,46 +1,60 @@
 #include <iostream>
+#include <vector>
+#include <cstdlib>
 #include "Value.h"
+#include "nn.h"
+#include "optim.h"
 
-int main () {
+int main() {
+    // Basic dataset: (x1, x2) -> y
+    std::vector<std::pair<std::vector<float>, float>> dataset = {
+        {{0.0f, 0.0f}, 0.0f},
+        {{0.0f, 1.0f}, 1.0f},
+        {{1.0f, 0.0f}, 1.0f},
+        {{1.0f, 1.0f}, 0.0f},
+    };
 
-    // basic neuron
+    std::srand(42);
 
-    // inputs
-    auto x1 = std::make_shared<Value>(2.0f, "x1");
-    auto x2 = std::make_shared<Value>(0.0f, "x2");
+    // 2 inputs -> 8 hidden -> 1 output
+    MLP model(2, {8, 1});
+    SGD optimizer(0.1f, model.parameters());
 
-    // weights
-    auto w1 = std::make_shared<Value>(-3.0f, "w1");
-    auto w2 = std::make_shared<Value>(1.0f, "w2");
+    std::cout << "Training MLP on XOR dataset...\n" << std::endl;
 
-    // bias
-    auto b = std::make_shared<Value>(6.8813735870195432f, "b");
+    for (int epoch = 0; epoch < 100; epoch++) {
+        float total_loss = 0.0f;
 
-    auto x1w1 = w1 * x1;
-    x1w1->label = "x1w1";
+        for (const auto& sample : dataset) {
+            auto x1 = std::make_shared<Value>(sample.first[0], "x1");
+            auto x2 = std::make_shared<Value>(sample.first[1], "x2");
+            auto target = std::make_shared<Value>(sample.second, "y");
 
-    auto x2w2 = w2 * x2;
-    x2w2->label = "x2w2";
+            auto pred = model({x1, x2})[0];
+            auto diff = pred - target;
+            auto loss = diff * diff;
 
-    auto x1w1x2w2 = x1w1 + x2w2;
-    x1w1x2w2->label = "x1w1x2w2";
+            total_loss += loss->data;
+            loss->backward(loss);
+            optimizer.step();
+        }
 
-    // compute output
-    auto d = x1w1x2w2 + b;
-    d->label = "d";
+        if (epoch % 10 == 0) {
+            // Every 10 epochs, print loss
+            std::cout << "epoch " << epoch << "  loss: " << total_loss / dataset.size() << std::endl;
+        }
+    }
 
-    auto e = exp(2.0f * d);
-    e->label = "e";
+    std::cout << "\nPredictions after training:" << std::endl;
+    for (const auto& sample : dataset) {
+        auto x1 = std::make_shared<Value>(sample.first[0], "x1");
+        auto x2 = std::make_shared<Value>(sample.first[1], "x2");
 
-    // apply tanh
-    auto o = (e - 1) / (e + 1);
-    o->label = "o";
-
-    std::cout << "o: " << o->data << std::endl;
-
-    o->backward(o);
-
-    exportGraph(o, "graph.dot");
+        auto pred = model({x1, x2})[0];
+        std::cout << "  (" << sample.first[0] << ", " << sample.first[1]
+                  << ") -> " << pred->data
+                  << "  (target: " << sample.second << ")" << std::endl;
+    }
 
     return 0;
 }
